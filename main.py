@@ -97,6 +97,8 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         "Bye!", reply_markup=ReplyKeyboardRemove()
     )
 
+    start(update, context)
+
     return ConversationHandler.END
 
 def main() -> None:
