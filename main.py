@@ -40,22 +40,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     return CHOOSING
 
-# async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    
-#     reply_keyboard = [["Rock", "Paper", "Scissors"]]
-
-#     await update.message.reply_text(
-#         "Choose option:",
-#         reply_markup=ReplyKeyboardMarkup(
-#             reply_keyboard, one_time_keyboard=True
-#         ),
-#     )
-
-#     return CHOOSE_ACTION
-
 async def check_winner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
     computer = choice(["Rock", "Paper", "Scissors"])
+    user = update.effective_message.text
 
     keyboard = [
         [
@@ -64,10 +52,15 @@ async def check_winner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         ],
     ]
 
-    print(context.args)
+    message_to_user = "No one won"
+
+    if (user == "Paper" and computer == "Rock") or (user == "Scissors" and computer == "Paper") or (user == "Rock" and computer == "Scissors"):
+        message_to_user = "You won!!"
+    elif (user == "Rock" and computer == "Paper") or (user == "Paper" and computer == "Scissors") or (user == "Scissors" and computer == "Rock"):
+        message_to_user = "You lost!!"
 
     await update.message.reply_text(
-        f"Computer - {computer}\nYou win or defeat?",
+        f"Computer - {computer}\n{message_to_user}",
         reply_markup = InlineKeyboardMarkup(keyboard)
     )
 
