@@ -11,6 +11,7 @@ from telegram.ext import (
     ContextTypes,
     ConversationHandler,
     MessageHandler,
+    CallbackQueryHandler,
     filters,
 )
 from configparser import ConfigParser
@@ -20,15 +21,15 @@ config = ConfigParser()
 config.read("config.ini")
 BOT_TOKEN = config["Telegram"]["tg_token"]
 
-PLAY_OR_REGISTER, CHOOSE_ACTION, AGAIN_OR_CANCEL = range(3)
-
+CHOOSING, CHOOSE_ACTION = range(2)
+CANCEL, PLAY, REGISTER = range(3)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
     keyboard = [
         [
-            InlineKeyboardButton("Play", callback_data="1"),
-            InlineKeyboardButton("Register", callback_data="2"),
+            InlineKeyboardButton("Play", callback_data=PLAY),
+            InlineKeyboardButton("Register", callback_data=REGISTER),
         ],
     ]
 
@@ -37,35 +38,67 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         reply_markup = InlineKeyboardMarkup(keyboard)
     )
 
-    return PLAY_OR_REGISTER
+    return CHOOSING
 
-async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+# async def play_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
-    reply_keyboard = [["Rock", "Paper", "Scissors"]]
+#     reply_keyboard = [["Rock", "Paper", "Scissors"]]
 
-    await update.message.reply_text(
-        "Choose option:",
-        reply_markup=ReplyKeyboardMarkup(
-            reply_keyboard, one_time_keyboard=True
-        ),
-    )
+#     await update.message.reply_text(
+#         "Choose option:",
+#         reply_markup=ReplyKeyboardMarkup(
+#             reply_keyboard, one_time_keyboard=True
+#         ),
+#     )
 
-    return CHOOSE_ACTION
+#     return CHOOSE_ACTION
 
 async def check_winner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
     computer = choice(["Rock", "Paper", "Scissors"])
 
-    reply_keyboard = [["Play again", "Cancel"]]
+    keyboard = [
+        [
+            InlineKeyboardButton("Play again", callback_data=PLAY),
+            InlineKeyboardButton("Cancel", callback_data=CANCEL),
+        ],
+    ]
+
+    print(context.args)
 
     await update.message.reply_text(
-        f"You win or defeat?\n Computer - {computer}",
-        reply_markup=ReplyKeyboardMarkup(
-            reply_keyboard, one_time_keyboard=True
-        ),
+        f"Computer - {computer}\nYou win or defeat?",
+        reply_markup = InlineKeyboardMarkup(keyboard)
     )
 
-    return AGAIN_OR_CANCEL
+    return CHOOSING
+
+
+async def choosing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    print("CALLBACK -", query.data)
+
+    if int(query.data) == PLAY:
+        await query.edit_message_text(text="Let's play!")
+
+        reply_keyboard = [["Rock", "Paper", "Scissors"]]
+
+        await query.message.reply_text(
+            "Choose option:",
+            reply_markup=ReplyKeyboardMarkup(
+                reply_keyboard, one_time_keyboard=True
+            ),
+        )
+        return CHOOSE_ACTION
+    elif query.data == REGISTER:
+        # TODO
+        pass
+    else:
+        await query.edit_message_text(text="Bye!")
+
+        return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
@@ -75,7 +108,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     return ConversationHandler.END
 
-
 def main() -> None:
 
     application = Application.builder().token(BOT_TOKEN).build()
@@ -83,22 +115,16 @@ def main() -> None:
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
-            PLAY_OR_REGISTER: [
-                MessageHandler(filters.Text("Play"), play_game),
-                # TODO
+            CHOOSING: [
+                CallbackQueryHandler(choosing_callback), 
             ],
             CHOOSE_ACTION: [
                 MessageHandler(filters.Regex("^(Rock|Paper|Scissors)$"), check_winner), 
-            ],
-            AGAIN_OR_CANCEL: [
-                MessageHandler(filters.Text("Play again"), play_game),
-                MessageHandler(filters.Text("Cancel"), cancel),
             ],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
-    application.add_handler(CallbackQueryHandler(button))
     application.add_handler(conv_handler)
 
     application.run_polling(allowed_updates=Update.ALL_TYPES)
