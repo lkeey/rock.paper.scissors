@@ -71,17 +71,15 @@ async def choosing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     query = update.callback_query
     await query.answer()
 
-    print("CALLBACK -", query.data)
-
     if int(query.data) == PLAY:
         await query.edit_message_text(text="Let's play!")
 
-        reply_keyboard = [["Rock", "Paper", "Scissors"]]
+        reply_keyboard = [["Rock", "Paper"], ["Scissors"]]
 
         await query.message.reply_text(
             "Choose option:",
             reply_markup=ReplyKeyboardMarkup(
-                reply_keyboard, one_time_keyboard=True
+                reply_keyboard, one_time_keyboard=True, resize_keyboard=True
             ),
         )
         return CHOOSE_ACTION
