@@ -3,7 +3,8 @@ from telegram import (
     ReplyKeyboardRemove, 
     Update,
     InlineKeyboardButton, 
-    InlineKeyboardMarkup
+    InlineKeyboardMarkup,
+    KeyboardButton
 )
 from telegram.ext import (
     Application,
@@ -21,7 +22,10 @@ config = ConfigParser()
 config.read("config.ini")
 BOT_TOKEN = config["Telegram"]["tg_token"]
 
-CHOOSING, CHOOSE_ACTION = range(2)
+#states
+CHOOSING, CHOOSE_ACTION, NAME, PHONE = range(3)
+
+# callbacks
 CANCEL, PLAY, REGISTER = range(3)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -66,7 +70,6 @@ async def check_winner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     return CHOOSING
 
-
 async def choosing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
@@ -83,22 +86,42 @@ async def choosing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             ),
         )
         return CHOOSE_ACTION
-    elif query.data == REGISTER:
-        # TODO
-        pass
+    elif int(query.data) == REGISTER:
+        await query.edit_message_text(text="Let's start registration")
+
+        await query.message.reply_text('Please, send me your name')
+        return NAME
     else:
         await query.edit_message_text(text="Bye!")
 
+        await start(update, context)
         return ConversationHandler.END
 
+async def save_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    name = update.effective_message.text
+    await update.message.reply_text(f'Thank you for sharing your name: {name}')
+    
+    contact_button = KeyboardButton(text="Share your phone number", request_contact=True)
+    reply_markup = ReplyKeyboardMarkup([[contact_button]], one_time_keyboard=True, resize_keyboard=True)
+
+    await update.message.reply_text('Please, send me your phone number:', reply_markup=reply_markup)
+    return PHONE
+
+async def save_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    phone_number = update.message.contact.phone_number
+    await update.message.reply_text(f'Thank you for sharing your phone number: {phone_number}')
+    
+    # TODO save to db
+    await start(update, context)
+    return ConversationHandler.END
+    
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
     await update.message.reply_text(
         "Bye!", reply_markup=ReplyKeyboardRemove()
     )
 
-    start(update, context)
-
+    await start(update, context)
     return ConversationHandler.END
 
 def main() -> None:
@@ -114,7 +137,14 @@ def main() -> None:
             CHOOSE_ACTION: [
                 MessageHandler(filters.Regex("^(Rock|Paper|Scissors)$"), check_winner), 
             ],
+            NAME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, save_name)
+            ],
+            PHONE: [
+                MessageHandler(filters.CONTACT, save_phone)
+            ],
         },
+        # обязательно ли его прописывать?
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
