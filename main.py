@@ -98,24 +98,21 @@ async def check_winner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             row = await cursor.fetchone()
             if row:
                 # if user exists, increment their points
-                print("ROW -", row, user_id)
-                try:
-                    if is_winner:
-                        w = row[0] + 1 if row[0] != None else 1
-                        await db.execute('''
-                            UPDATE users
-                            SET wins = ?
-                            WHERE user_id = ?
-                        ''', (w, user_id))
-                    else:
-                        d = row[1] + 1 if row[1] != None else 1
-                        await db.execute('''
-                            UPDATE users
-                            SET defeats = ?
-                            WHERE user_id = ?
-                        ''', (d, user_id))
-                except Exception as e:
-                    print(e)
+                
+                if is_winner:
+                    w = row[0] + 1 if row[0] != None else 1
+                    await db.execute('''
+                        UPDATE users
+                        SET wins = ?
+                        WHERE user_id = ?
+                    ''', (w, user_id))
+                else:
+                    d = row[1] + 1 if row[1] != None else 1
+                    await db.execute('''
+                        UPDATE users
+                        SET defeats = ?
+                        WHERE user_id = ?
+                    ''', (d, user_id))
             else:
                 # if user does not exist set 1 or 0 change on get name
                 await db.execute('''
@@ -173,26 +170,26 @@ async def choosing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 async def save_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     name = update.effective_message.text
-    id = update.effective_user.id
+    user_id = update.effective_user.id
     
     await update.message.reply_text(f'Thank you for sharing your name: {name}')
     
     async with aiosqlite.connect('bot.db') as db:  
-        async with db.execute('SELECT name FROM users WHERE user_id = ?', (update.effective_user.id,)) as cursor:
+        async with db.execute('SELECT user_id FROM users WHERE user_id = ?', (user_id,)) as cursor:
             row = await cursor.fetchone()
             if row[0] != None:
                 await db.execute('''
                     UPDATE users
                     SET name = ?
                     WHERE user_id = ?
-                ''', (name, id))
+                ''', (name, user_id))
             else:
                 await db.execute('''
                     INSERT INTO users (user_id, name) 
                     VALUES (?, ?)
-                ''', (id, name))
+                ''', (user_id, name))
             await db.commit()
-
+   
     contact_button = KeyboardButton(text="Share your phone number", request_contact=True)
     reply_markup = ReplyKeyboardMarkup([[contact_button]], one_time_keyboard=True, resize_keyboard=True)
 
@@ -224,7 +221,9 @@ async def get_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if len(messages) != 0:
         await update.message.reply_text("user_id: (wins - defeats) - name - phone")
         await update.message.reply_text(messages)
-        
+    else:
+        await update.message.reply_text("- no users -")
+ 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
     await update.message.reply_text(
