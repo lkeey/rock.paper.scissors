@@ -110,8 +110,8 @@ async def choosing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 row = await cursor.fetchone()
                 if row:
                     await query.edit_message_text('You are already registered with the name')
-                    await start(query, context)
-                    return ConversationHandler.END
+                    
+                    return await start(query, context)
 
         await query.edit_message_text(text="Let's start registration")
 
@@ -120,14 +120,12 @@ async def choosing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     elif int(query.data) == LEADER_BOARD:
         await query.edit_message_text(text="There are all users:")
         await get_users(query, context)
-        await start(query, context)
-
-        return ConversationHandler.END
+        
+        return await start(query, context)
     else:
         await query.edit_message_text(text="Bye...")
-        await start(query, context)
-
-        return ConversationHandler.END
+        
+        return await start(query, context)
 
 async def save_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     name = update.effective_message.text
@@ -162,9 +160,7 @@ async def save_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         ''', (phone_number, id))
         await db.commit()
 
-    await start(update, context)
-
-    return ConversationHandler.END
+    return await start(update, context)
     
 async def get_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     async with aiosqlite.connect('bot.db') as db:
@@ -180,8 +176,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         "Bye!", reply_markup=ReplyKeyboardRemove()
     )
 
-    await start(update, context)
-    return ConversationHandler.END
+    return await start(update, context)
 
 def main() -> None:
     application = Application.builder().token(BOT_TOKEN).build()
