@@ -18,6 +18,7 @@ from telegram.ext import (
 from configparser import ConfigParser
 from random import choice
 import aiosqlite
+import asyncio
 
 config = ConfigParser()
 config.read("config.ini")
@@ -207,6 +208,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    # import asyncio
-    # asyncio.run(init_db())
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(init_db())
+
     main()
