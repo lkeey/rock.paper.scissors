@@ -19,6 +19,10 @@ from configparser import ConfigParser
 from random import choice
 import aiosqlite
 import asyncio
+from warnings import filterwarnings
+from telegram.warnings import PTBUserWarning
+
+filterwarnings(action="ignore", message=r".*CallbackQueryHandler", category=PTBUserWarning)
 
 config = ConfigParser()
 config.read("config.ini")
@@ -180,6 +184,8 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return await start(update, context)
 
 def main() -> None:
+    print("MAIN")
+    
     application = Application.builder().token(BOT_TOKEN).build()
 
     conv_handler = ConversationHandler(
@@ -198,8 +204,8 @@ def main() -> None:
                 MessageHandler(filters.CONTACT, save_phone)
             ],
         },
-        # обязательно ли его прописывать?
         fallbacks=[CommandHandler("cancel", cancel)],
+        # per_message=True,
     )
 
     application.add_handler(conv_handler)
