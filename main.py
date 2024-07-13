@@ -22,6 +22,8 @@ import asyncio
 from warnings import filterwarnings
 from telegram.warnings import PTBUserWarning
 
+ADMINS = [5712064064, 1010205515]
+
 # dont show per_message error
 filterwarnings(action="ignore", message=r".*CallbackQueryHandler", category=PTBUserWarning)
 
@@ -30,10 +32,10 @@ config.read("config.ini")
 BOT_TOKEN = config["Telegram"]["tg_token"]
 
 #states
-CHOOSING, CHOOSE_ACTION, NAME, PHONE = range(4)
+CHOOSING, CHOOSE_ACTION, NAME, PHONE, GET_MAIL = range(5)
 
 # callbacks
-CANCEL, PLAY, REGISTER, LEADER_BOARD = range(4)
+CANCEL, PLAY, REGISTER, CONVERSIONS, LEADER_BOARD, MAIL, YES_MAIL, NO_MAIL = range(8)
 
 # database initialization
 async def init_db():
@@ -51,20 +53,35 @@ async def init_db():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
-    keyboard = [
-        [
-            InlineKeyboardButton("Play", callback_data=PLAY),
-            InlineKeyboardButton("Register", callback_data=REGISTER),
-        ],
-        [
-            InlineKeyboardButton("LeaderBoard", callback_data=LEADER_BOARD),
+    if update.effective_user.id in ADMINS:
+        keyboard = [
+            [
+                InlineKeyboardButton("Conversions", callback_data=CONVERSIONS),
+                InlineKeyboardButton("List of Users", callback_data=LEADER_BOARD),
+            ],
+            [
+                InlineKeyboardButton("Send everyone", callback_data=MAIL),
+            ]
         ]
-    ]
 
-    await update.message.reply_text(
-        "Hi! Would to play Rock & Paper & Scissors with me?",
-        reply_markup = InlineKeyboardMarkup(keyboard)
-    )
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="You are in admin panel",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+    else:
+        keyboard = [
+            [
+                InlineKeyboardButton("Play", callback_data=PLAY),
+                InlineKeyboardButton("Register", callback_data=REGISTER),
+            ]
+        ]
+
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="Hi! Would to play Rock & Paper & Scissors with me?",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
 
     return CHOOSING
 
@@ -158,10 +175,26 @@ async def choosing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await query.message.reply_text('Please, send me your name')
         
         return NAME
+    elif int(query.data) == CONVERSIONS:
+        await query.edit_message_text(text="It's conversions:")
+        # TODO
+        
+        return await start(query, context)
     elif int(query.data) == LEADER_BOARD:
         await query.edit_message_text(text="There are all users:")
         await get_users(query, context)
         
+        return await start(update, context)
+    elif int(query.data) == MAIL:
+        await query.edit_message_text(text="Send me message and I'll send it everyone")
+        
+        return GET_MAIL
+    elif int(query.data) == YES_MAIL:
+        await send_mail(query, context)
+                
+        return await start(query, context)
+    elif int(query.data) == NO_MAIL:
+               
         return await start(query, context)
     else:
         await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.effective_message.message_id)
@@ -224,6 +257,37 @@ async def get_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         await update.message.reply_text("- no users -")
  
+async def get_mail(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    msg = update.effective_message.text
+    
+    keyboard = [
+            [
+                InlineKeyboardButton("Yes", callback_data=YES_MAIL),
+                InlineKeyboardButton("No", callback_data=NO_MAIL),
+            ]
+        ]
+
+    await update.message.reply_text(
+        f'Send it:\n\n{msg}',
+        reply_markup=keyboard,
+        context={"msg": msg},
+        parse_mode="MarkdownV2"
+    )
+
+    return CHOOSING
+
+async def send_mail(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    msg = context["msg"]
+    
+    # TODO send everyone
+    await update.message.reply_text(
+        msg,
+        context={},
+        parse_mode="MarkdownV2"
+    )
+
+    return CHOOSING
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
     await update.message.reply_text(
@@ -251,6 +315,9 @@ def main() -> None:
             ],
             PHONE: [
                 MessageHandler(filters.CONTACT, save_phone)
+            ],
+            GET_MAIL: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_mail)
             ],
         },
         #always handles 
