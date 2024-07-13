@@ -22,7 +22,7 @@ import asyncio
 from warnings import filterwarnings
 from telegram.warnings import PTBUserWarning
 
-ADMINS = [5712064064, 1010205515]
+ADMINS = [5712064064, 1010205515] 
 
 # dont show per_message error
 filterwarnings(action="ignore", message=r".*CallbackQueryHandler", category=PTBUserWarning)
@@ -37,6 +37,9 @@ CHOOSING, CHOOSE_ACTION, NAME, PHONE, GET_MAIL = range(5)
 # callbacks
 CANCEL, PLAY, REGISTER, CONVERSIONS, LEADER_BOARD, MAIL, YES_MAIL, NO_MAIL = range(8)
 
+# conversation_statuces
+START, PLAYED, REGISTERED, PLAYED_AND_REGISTERED = range(4)
+
 # database initialization
 async def init_db():
     async with aiosqlite.connect('bot.db') as db:
@@ -46,7 +49,8 @@ async def init_db():
                 wins INTEGER,
                 defeats INTEGER,        
                 name TEXT,
-                phone TEXT
+                phone TEXT,
+                conversation_status INTEGER default 0
             )
         ''')
         await db.commit()
@@ -120,22 +124,22 @@ async def check_winner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
                     w = row[0] + 1 if row[0] != None else 1
                     await db.execute('''
                         UPDATE users
-                        SET wins = ?
+                        SET wins = ?, conversation_status = ?
                         WHERE user_id = ?
-                    ''', (w, user_id))
+                    ''', (w, PLAYED_AND_REGISTERED, user_id))
                 else:
                     d = row[1] + 1 if row[1] != None else 1
                     await db.execute('''
                         UPDATE users
-                        SET defeats = ?
+                        SET defeats = ?, conversation_status = ?
                         WHERE user_id = ?
-                    ''', (d, user_id))
+                    ''', (d, PLAYED_AND_REGISTERED, user_id))
             else:
                 # if user does not exist set 1 or 0 change on get name
                 await db.execute('''
-                    INSERT INTO users (user_id, wins, defeats) 
-                    VALUES (?, ?, ?)
-                ''', (user_id, 1 if is_winner else 0, 0 if is_winner else 1))
+                    INSERT INTO users (user_id, wins, defeats, conversation_status) 
+                    VALUES (?, ?, ?, ?)
+                ''', (user_id, 1 if is_winner else 0, 0 if is_winner else 1, PLAYED))
             await db.commit()
 
 
@@ -166,10 +170,10 @@ async def choosing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         async with aiosqlite.connect('bot.db') as db:
             async with db.execute('SELECT name FROM users WHERE user_id = ?', (update.effective_user.id,)) as cursor:
                 row = await cursor.fetchone()
-                if row[0] != None:
+                if row and row[0] != None:
                     await query.edit_message_text('You are already registered with the name')
                     
-                    return await start(query, context)
+                    return await start(update, context)
 
         await query.edit_message_text(text="Let's start registration")
         await query.message.reply_text('Please, send me your name')
@@ -179,7 +183,7 @@ async def choosing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await query.edit_message_text(text="It's conversions:")
         # TODO
         
-        return await start(query, context)
+        return await start(update, context)
     elif int(query.data) == LEADER_BOARD:
         await query.edit_message_text(text="There are all users:")
         await get_users(query, context)
@@ -210,7 +214,7 @@ async def save_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     async with aiosqlite.connect('bot.db') as db:  
         async with db.execute('SELECT user_id FROM users WHERE user_id = ?', (user_id,)) as cursor:
             row = await cursor.fetchone()
-            if row[0] != None:
+            if row and row[0] != None:
                 await db.execute('''
                     UPDATE users
                     SET name = ?
@@ -231,28 +235,37 @@ async def save_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def save_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     phone_number = update.message.contact.phone_number
-    id = update.effective_user.id
+    user_id = update.effective_user.id
 
     await update.message.reply_text(f'Thank you for sharing your phone number: {phone_number}')
     
     async with aiosqlite.connect('bot.db') as db:
-        await db.execute('''
-            UPDATE users
-            SET phone = ?
-            WHERE user_id = ?
-        ''', (phone_number, id))
-        await db.commit()
+        async with db.execute('SELECT conversation_status FROM users WHERE user_id = ?', (user_id,)) as cursor:
+            current_status = await cursor.fetchone()
+            new_status = current_status[0]
+
+            if current_status[0] == PLAYED:
+                new_status = PLAYED_AND_REGISTERED
+            elif current_status[0] == START:
+                new_status = REGISTERED
+
+            await db.execute('''
+                UPDATE users
+                SET phone = ?, conversation_status = ?
+                WHERE user_id = ?
+            ''', (phone_number, new_status, user_id))
+            await db.commit()
 
     return await start(update, context)
     
 async def get_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     async with aiosqlite.connect('bot.db') as db:
-        async with db.execute('SELECT user_id, wins, defeats, name, phone FROM users') as cursor:
+        async with db.execute('SELECT user_id, wins, defeats, name, phone, conversation_status FROM users') as cursor:
             rows = await cursor.fetchall()
-            messages = '\n'.join([f"{row[0]}: ({row[1]} - {row[2]}) - {row[3]} - {row[4]}" for row in rows])
+            messages = '\n'.join([f"{row[0]}: ({row[1]} - {row[2]}) - {row[3]} - {row[4]} #{row[5]}" for row in rows])
 
     if len(messages) != 0:
-        await update.message.reply_text("user_id: (wins - defeats) - name - phone")
+        await update.message.reply_text("user_id: (wins - defeats) - name - phone #conversationStatus")
         await update.message.reply_text(messages)
     else:
         await update.message.reply_text("- no users -")
