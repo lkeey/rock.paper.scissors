@@ -192,14 +192,14 @@ async def choosing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     elif int(query.data) == YES_MAIL:
         await send_mail(query, context)
                 
-        return await start(query, context)
+        return await start(update, context)
     elif int(query.data) == NO_MAIL:
                
-        return await start(query, context)
+        return await start(update, context)
     else:
         await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.effective_message.message_id)
         
-        return await start(query, context)
+        return await start(update, context)
 
 async def save_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     name = update.effective_message.text
@@ -267,26 +267,28 @@ async def get_mail(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             ]
         ]
 
-    await update.message.reply_text(
-        f'Send it:\n\n{msg}',
-        reply_markup=keyboard,
-        context={"msg": msg},
-        parse_mode="MarkdownV2"
-    )
+    context.user_data['msg'] = msg
+
+    await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f'Send it:\n\n{msg}',
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="MarkdownV2"
+        )
 
     return CHOOSING
 
 async def send_mail(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    msg = context["msg"]
+    msg = context.user_data.get('msg', 'no message found')
     
-    # TODO send everyone
-    await update.message.reply_text(
-        msg,
-        context={},
-        parse_mode="MarkdownV2"
-    )
-
-    return CHOOSING
+    async with aiosqlite.connect('bot.db') as db:
+        async with db.execute("SELECT user_id FROM users") as cursor:
+            async for row in cursor:
+                await context.bot.send_message(
+                    chat_id=row[0],
+                    text=msg,
+                    parse_mode="MarkdownV2"
+                )
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
