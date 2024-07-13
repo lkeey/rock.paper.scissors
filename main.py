@@ -37,7 +37,7 @@ CHOOSING, CHOOSE_ACTION, NAME, PHONE, GET_MAIL = range(5)
 # callbacks
 CANCEL, PLAY, REGISTER, CONVERSIONS, LEADER_BOARD, MAIL, YES_MAIL, NO_MAIL = range(8)
 
-# conversation_statuces
+# conversation statuces
 START, PLAYED, REGISTERED, PLAYED_AND_REGISTERED = range(4)
 
 # database initialization
@@ -181,7 +181,21 @@ async def choosing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return NAME
     elif int(query.data) == CONVERSIONS:
         await query.edit_message_text(text="It's conversions:")
-        # TODO
+    
+        states_list = ["START", "PLAYED", "REGISTERED", "PLAYED_AND_REGISTERED"]
+
+        number_users = await get_conversions()
+        message = f"{states_list[0]}"
+        
+        for i in range(len(states_list) - 1):
+            conversion = round(number_users[i + 1] / number_users[i] * 100, 2)
+            
+            message += f"\n|\n|    {conversion}%\nv\n{states_list[i+1]}"
+
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=message,
+        )
         
         return await start(update, context)
     elif int(query.data) == LEADER_BOARD:
@@ -270,7 +284,7 @@ async def get_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         await update.message.reply_text("- no users -")
  
-async def get_mail(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def get_mail(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     msg = update.effective_message.text
     
     keyboard = [
@@ -302,6 +316,23 @@ async def send_mail(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     text=msg,
                     parse_mode="MarkdownV2"
                 )
+
+async def get_conversions():
+    db = await aiosqlite.connect("bot.db")
+    
+    number_users = []
+    statuses = [START, PLAYED, REGISTERED, PLAYED_AND_REGISTERED]
+
+    for status in statuses:
+        total_users_with_status = await db.execute(
+            """SELECT COUNT(*) FROM users WHERE conversation_status >= ?""", (status,)
+        )
+        total_users_with_status = await total_users_with_status.fetchone()
+        total_users_with_status = total_users_with_status[0]
+        
+        number_users.append(total_users_with_status)
+
+    return number_users
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
