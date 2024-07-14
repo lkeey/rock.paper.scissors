@@ -17,10 +17,12 @@ from telegram.ext import (
 )
 from configparser import ConfigParser
 from random import choice
+from datetime import time
 import aiosqlite
 import asyncio
 from warnings import filterwarnings
 from telegram.warnings import PTBUserWarning
+
 
 ADMINS = [5712064064, 1010205515] 
 
@@ -40,6 +42,9 @@ CANCEL, PLAY, REGISTER, CONVERSIONS, LEADER_BOARD, MAIL, YES_MAIL, NO_MAIL = ran
 # conversation statuces
 START, PLAYED, REGISTERED, PLAYED_AND_REGISTERED = range(4)
 
+# job statuces
+ONCE, DAYLY= range(2)
+
 # database initialization
 async def init_db():
     async with aiosqlite.connect('bot.db') as db:
@@ -56,7 +61,7 @@ async def init_db():
         await db.commit()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    
+
     if update.effective_user.id in ADMINS:
         keyboard = [
             [
@@ -90,10 +95,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return CHOOSING
 
 async def check_winner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    
+
     computer = choice(["Rock", "Paper", "Scissors"])
     user = update.effective_message.text
     user_id = update.effective_user.id
+
+    """Ответил, поэтому писать уже не нужно"""
+    remove_job_if_exists(f"{user_id}-{ONCE}")
 
     is_winner = False
 
@@ -154,10 +162,15 @@ async def choosing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     query = update.callback_query
     await query.answer()
 
+    user_id = update.effective_chat.id
+
     if int(query.data) == PLAY:
         await query.edit_message_text(text="Let's play!")
 
         reply_keyboard = [["Rock", "Paper"], ["Scissors"]]
+
+        """если не походит, то через минуту напишем, чтобы ходил"""
+        context.job_queue.run_once(once_job_step, 60, chat_id=user_id, name=f"{user_id}-{ONCE}")
 
         await query.message.reply_text(
             "Choose option:",
@@ -334,6 +347,26 @@ async def get_conversions():
 
     return number_users
 
+def remove_job_if_exists(name: str, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    current_jobs = context.job_queue.get_jobs_by_name(name)
+    if not current_jobs:
+        return False
+    for job in current_jobs:
+        job.schedule_removal()
+    return True
+
+async def daily_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    async with aiosqlite.connect('bot.db') as db:
+        async with db.execute('SELECT user_id, name FROM users') as cursor:
+            rows = await cursor.fetchall()
+            for row in rows:
+                print(row)
+                await context.bot.send_message(chat_id=row[0], text=f"Hello, {row[1]}, let's play!")
+
+async def once_job_step(context: ContextTypes.DEFAULT_TYPE) -> None:
+    job = context.job
+    await context.bot.send_message(chat_id=job.chat_id, text="Go ahead))")
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     
     await update.message.reply_text(
@@ -346,7 +379,7 @@ def main() -> None:
     print("MAIN")
 
     application = Application.builder().token(BOT_TOKEN).build()
-
+    
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
@@ -370,6 +403,8 @@ def main() -> None:
         fallbacks=[CommandHandler("cancel", cancel)],
         # per_message=True,
     )
+
+    #application.job_queue.run_daily(daily_job, time=time(hour=13, minute=50))
 
     application.add_handler(conv_handler)
 
