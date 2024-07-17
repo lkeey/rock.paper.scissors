@@ -13,7 +13,7 @@ from telegram.ext import (
     ConversationHandler,
     MessageHandler,
     CallbackQueryHandler,
-    filters,
+    filters
 )
 from configparser import ConfigParser
 from random import choice
@@ -22,7 +22,7 @@ import aiosqlite
 import asyncio
 from warnings import filterwarnings
 from telegram.warnings import PTBUserWarning
-
+import pytz
 
 ADMINS = [5712064064, 1010205515] 
 
@@ -101,7 +101,7 @@ async def check_winner(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     user_id = update.effective_user.id
 
     """Ответил, поэтому писать уже не нужно"""
-    remove_job_if_exists(f"{user_id}-{ONCE}")
+    remove_job_if_exists(name=f"{user_id}-{ONCE}", context=context)
 
     is_winner = False
 
@@ -170,7 +170,7 @@ async def choosing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         reply_keyboard = [["Rock", "Paper"], ["Scissors"]]
 
         """если не походит, то через минуту напишем, чтобы ходил"""
-        context.job_queue.run_once(once_job_step, 60, chat_id=user_id, name=f"{user_id}-{ONCE}")
+        context.job_queue.run_once(once_job_step, 10, chat_id=user_id, name=f"{user_id}-{ONCE}")
 
         await query.message.reply_text(
             "Choose option:",
@@ -355,13 +355,16 @@ def remove_job_if_exists(name: str, context: ContextTypes.DEFAULT_TYPE) -> bool:
         job.schedule_removal()
     return True
 
-async def daily_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+async def daily_job_progrev(context: ContextTypes.DEFAULT_TYPE) -> None:
     async with aiosqlite.connect('bot.db') as db:
         async with db.execute('SELECT user_id, name FROM users') as cursor:
             rows = await cursor.fetchall()
             for row in rows:
                 print(row)
-                await context.bot.send_message(chat_id=row[0], text=f"Hello, {row[1]}, let's play!")
+                if row[1] != None:
+                    await context.bot.send_message(chat_id=row[0], text=f"Hello, {row[1]}, let's play!")
+                else:
+                    await context.bot.send_message(chat_id=row[0], text=f"Hello, let's play!")
 
 async def once_job_step(context: ContextTypes.DEFAULT_TYPE) -> None:
     job = context.job
@@ -404,7 +407,8 @@ def main() -> None:
         # per_message=True,
     )
 
-    #application.job_queue.run_daily(daily_job, time=time(hour=13, minute=50))
+    # set correct time zone
+    application.job_queue.run_daily(daily_job_progrev, time=time(hour=17, minute=54, tzinfo=pytz.timezone("Europe/Moscow")))
 
     application.add_handler(conv_handler)
 
